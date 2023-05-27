@@ -10,12 +10,12 @@ export const cropVideo = async (videoData, setLast5MinutesChunks) => {
 
     const blob = await response.blob();
 
-    // Save the cropped video on the user's computer
+    // Save the zip file on the user's computer
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
 
     link.href = downloadUrl;
-    link.download = 'last-5-minutes.mp4';
+    link.download = 'last-5-minutes.zip';
     link.click();
   } catch (error) {
     console.error('Error when processing video on the client:', error);

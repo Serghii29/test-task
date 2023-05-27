@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const archiver = require('archiver');
 
 const app = express();
 
@@ -12,6 +13,10 @@ const app = express();
 app.use(cors({
   origin: 'http://localhost:3000'
 }));
+
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
 
 // Setting up Multer to upload files
 const storage = multer.diskStorage({
@@ -71,25 +76,42 @@ app.post('/crop-video', upload.single('videoData'), (req, res) => {
 
     trimProcess.on('close', (code) => {
       if (code === 0) {
-        // Sending the cropped video to the client
-        res.sendFile(outputPath, (err) => {
-          if (err) {
-            console.error('Error sending file:', err);
-          }
-          
-          // Delete the uploaded and processed files after sending
-          fs.unlink(videoPath, (err) => {
+        // Compressing the cropped video as a zip file
+        const zipPath = path.join(trimVideoPath, `${Date.now()}-last5.zip`);
+        const outputZip = fs.createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        outputZip.on('close', () => {
+          // Sending the zip file to the client
+          res.sendFile(zipPath, (err) => {
             if (err) {
-              console.error('Error deleting video file:', err);
+              console.error('Error sending file:', err);
             }
-          });
-          
-          fs.unlink(outputPath, (err) => {
-            if (err) {
-              console.error('Error deleting processed video file:', err);
-            }
+
+            // Delete the uploaded and processed files after sending
+            fs.unlink(videoPath, (err) => {
+              if (err) {
+                console.error('Error deleting video file:', err);
+              }
+            });
+
+            fs.unlink(outputPath, (err) => {
+              if (err) {
+                console.error('Error deleting processed video file:', err);
+              }
+            });
+
+            fs.unlink(zipPath, (err) => {
+              if (err) {
+                console.error('Error deleting zip file:', err);
+              }
+            });
           });
         });
+
+        archive.pipe(outputZip);
+        archive.file(outputPath, { name: uniqueFilename });
+        archive.finalize();
       } else {
         res.status(500).send('Error processing video on the server');
       }
