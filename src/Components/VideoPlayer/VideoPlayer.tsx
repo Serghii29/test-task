@@ -1,136 +1,75 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { cropVideo } from "../../cropVideo";
 
 export const VideoPlayer: React.FC = React.memo(() => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const webcamRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const [isCapturing, setCapturing] = useState(false);
-  const [last5MinutesChunks, setLast5MinutesChunks] = useState<Blob[]>([]);
-
-  const handleStartCapture = useCallback(() => {
-    // chunksRef.current = [];
-    mediaRecorderRef.current?.start();
-    setCapturing(true);
-  }, []);
-
-  const handleStopCapture = useCallback(() => {
-    mediaRecorderRef.current?.stop();
-    setCapturing(false);
-    saveLast5MinutesCapture();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediaRecorderRef.current]);
-
-  // const saveCapture = useCallback(() => {
-  //   const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-  //   const videoURL = URL.createObjectURL(blob);
-  //   const link = document.createElement('a');
-
-  //   document.body.appendChild(link)
-
-  //   link.href = videoURL;
-
-  //   link.download = 'recorded-video.webm';
-
-  //   // link.click();
-  // }, []);
-
-  const saveRecentRecording = () => {
-    const chunks = chunksRef.current;
-    const videoBlob = new Blob(chunks, { type: 'video/webm' });
-
-    // Создаем URL для видео и добавляем его в DOM
-    const videoURL = URL.createObjectURL(videoBlob);
-    const videoElement = document.createElement('video');
-    videoElement.src = videoURL;
-    videoElement.controls = true;
-    document.body.appendChild(videoElement);
-
-    // Добавляем временные метки в видео
-    const currentTime = new Date().toLocaleString();
-    const timestampText = document.createTextNode(`Record: ${currentTime}`);
-    const timestampElement = document.createElement('p');
-    timestampElement.appendChild(timestampText);
-
-    if (videoElement.parentNode !== null) {
-      videoElement.parentNode.insertBefore(timestampElement, videoElement.nextSibling);
-    }
-
-    // Ограничиваем хранение только последних 5 минут записи
-    if (chunks.length > 300) {
-      chunks.shift();
-    }
-  };
-
-  const saveLast5MinutesCapture = useCallback(() => {
-    const allChunks = [...last5MinutesChunks, ...chunksRef.current];
-    setLast5MinutesChunks(allChunks.slice(-300));
-  }, [last5MinutesChunks]);
+  const [last5MinutesChunks, setLast5MinutesChunks] = useState<Blob | null>(null);
 
   useEffect(() => {
-    const videoElement = videoRef.current;
+    handleStartCapture();
+  }, []);
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-      .then ((stream) => {
-        if (videoElement !== null) {
-          videoElement.srcObject = stream;
-          // videoElement.play();
-        }
-
-        mediaRecorderRef.current = new MediaRecorder(stream, { 
-          mimeType: 'video/webm'
-        });
-
-        mediaRecorderRef.current.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) {
-            chunksRef.current.push(event.data);
-            saveRecentRecording();
-          }
-        }
-
-        handleStartCapture();
-      })
-      .catch((error) => {
-        console.error('Error accessing camera:', error);
-      })
-  }, [handleStartCapture]);
-
-   useEffect(() => {
-    const videoElement = videoRef.current;
-    const canvasElement = webcamRef.current;
-    const canvasContext = canvasElement?.getContext('2d');
-
-    const drawOverlay = () => {
-      if (canvasElement && canvasContext && videoElement) {
-        canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        canvasContext.drawImage(
-          videoElement, 
-          0, 
-          0, 
-          canvasElement.width, 
-          canvasElement.height
-        );
-      }
-    };
-
-    const drawInterval = setInterval(drawOverlay, 100);
+  useEffect(() => {
+    const drawInterval = setInterval(drawVideoFrame, 100);
 
     return () => {
       clearInterval(drawInterval);
     };
   }, []);
 
-  const handleDownloadLast5Minutes = () => {
-    const combinedBlob = new Blob(last5MinutesChunks, { type: 'video/webm' });
-    const videoURL = URL.createObjectURL(combinedBlob);
-    const link = document.createElement('a');
+  const handleStartCapture = useCallback(async () => {
+    const videoElement = videoRef.current;
 
-    link.href = videoURL;
-    link.download = 'last-5-minutes.webm';
-    link.click();
-  };
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then ((stream) => {
+        if (videoElement !== null) {
+          videoElement.srcObject = stream;
+        }
 
-  console.log('chunksRef:', chunksRef.current, 'last5MinutesChunks:', last5MinutesChunks);
+        mediaRecorderRef.current = new MediaRecorder(stream, { 
+          mimeType: 'video/webm'
+        });
+
+        mediaRecorderRef.current.ondataavailable = handleDataAvailable;
+      
+        mediaRecorderRef.current?.start();
+        setCapturing(true);
+      })
+      .catch((error) => {
+        console.error('Error accessing camera:', error);
+      })
+  }, []);
+
+  const handleStopCapture = useCallback(() => {
+    mediaRecorderRef.current?.stop();
+    setCapturing(false);
+  }, []);
+
+  const handleDataAvailable = useCallback((event: { data: Blob; }) => {
+    if (event.data.size > 0) {
+      setLast5MinutesChunks(event.data);
+    }
+  }, []);
+
+  const drawVideoFrame = () => {
+    const videoElement = videoRef.current;
+    const canvasElement = webcamRef.current;
+    const canvasContext = canvasElement?.getContext('2d');
+
+    if (canvasElement && canvasContext && videoElement) {
+      canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasContext.drawImage(
+        videoElement, 
+        0, 
+        0, 
+        canvasElement.width, 
+        canvasElement.height
+      );
+    }
+  }
 
   return (
     <div className="Container">
@@ -141,7 +80,6 @@ export const VideoPlayer: React.FC = React.memo(() => {
         controls
         width="640" 
         height="480"
-        style={{ display: 'none' }}
       >
       </video>
 
@@ -149,7 +87,7 @@ export const VideoPlayer: React.FC = React.memo(() => {
         ref={webcamRef}
         width="640" 
         height="480"
-        // style={{ display: 'none' }}
+        style={{ display: 'none' }}
       >
       </canvas>
 
@@ -159,8 +97,8 @@ export const VideoPlayer: React.FC = React.memo(() => {
         <button onClick={handleStartCapture} className="button">Start Capture</button>
       )}
 
-      {last5MinutesChunks.length > 0 && (
-        <button onClick={handleDownloadLast5Minutes} className="button">Save video</button>
+      {last5MinutesChunks && (
+        <button onClick={() => cropVideo(last5MinutesChunks, setLast5MinutesChunks)} className="button">Save video</button>
       )}
     </div>
   )
