@@ -7,10 +7,15 @@ export const VideoPlayer: React.FC = React.memo(() => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const [isCapturing, setCapturing] = useState(false);
   const [last5MinutesChunks, setLast5MinutesChunks] = useState<Blob | null>(null);
+  const [duration, setDuration] = useState(0)
 
   useEffect(() => {
     handleStartCapture();
   }, []);
+
+  useEffect(() => {
+    durationResolve();
+  }, [last5MinutesChunks]);
 
   useEffect(() => {
     const drawInterval = setInterval(drawVideoFrame, 100);
@@ -69,28 +74,65 @@ export const VideoPlayer: React.FC = React.memo(() => {
         canvasElement.height
       );
     }
-  }
+  };
+
+  const getBlobDuration = async (blob: Blob | null): Promise<number> => {
+    let tempVideoEl: HTMLVideoElement = document.createElement('video');
+  
+    const durationP: Promise<number> = new Promise((resolve, reject) => {
+      tempVideoEl.addEventListener('loadedmetadata', () => {
+        if(tempVideoEl.duration === Infinity) {
+          tempVideoEl.currentTime = Number.MAX_SAFE_INTEGER
+          tempVideoEl.ontimeupdate = () => {
+            tempVideoEl.ontimeupdate = null
+            resolve(tempVideoEl.duration)
+            tempVideoEl.currentTime = 0
+          }
+        }
+        // Normal behavior
+        else {
+          resolve(tempVideoEl.duration)
+        }
+      })
+    });
+
+    if (blob !== null) {
+      tempVideoEl.src = typeof blob === 'string'
+        ? blob
+        : (URL || window.URL).createObjectURL(blob);
+    }
+
+    return durationP;
+  };
+
+  const durationResolve = async () => {
+    const durationCheck = await getBlobDuration(last5MinutesChunks);
+    
+    setDuration(durationCheck);
+  };
 
   return (
     <div className="Container">
-      <video 
-        ref={videoRef}
-        src="../../../public/test-task.mp4"
-        autoPlay
-        controls
-        width="640" 
-        height="480"
-      >
-      </video>
+      <div className="VideoWrapper">
+        <video 
+          ref={videoRef}
+          autoPlay
+          controls
+          width="640" 
+          height="480"
+        >
+        </video>
 
-      <canvas 
-        ref={webcamRef}
-        width="640" 
-        height="480"
-        style={{ display: 'none' }}
-      >
-      </canvas>
-
+        <iframe 
+            width="640" 
+            height="480" 
+            src="https://www.youtube.com/embed/EzGPmg4fFL8" 
+            title="YouTube video player"  
+            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          >
+          </iframe>
+      </div>
+          
       {isCapturing ? (
         <button onClick={handleStopCapture} className="button">Stop Capture</button>
       ) : (
@@ -98,7 +140,7 @@ export const VideoPlayer: React.FC = React.memo(() => {
       )}
 
       {last5MinutesChunks && (
-        <button onClick={() => cropVideo(last5MinutesChunks, setLast5MinutesChunks)} className="button">Save video</button>
+        <button onClick={() => cropVideo(last5MinutesChunks, setLast5MinutesChunks, duration)} className="button">Save video</button>
       )}
     </div>
   )

@@ -26,3 +26,25 @@
   border-radius: 25px;
   cursor: pointer;
 }
+
+.VideoWrapper {
+  position: relative;
+  width: 640px;
+  height: 480px;
+}
+
+.VideoWrapper video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.VideoWrapper iframe {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
