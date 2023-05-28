@@ -1,11 +1,12 @@
 const express = require('express');
-const port = 5000;
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const archiver = require('archiver');
+
+const port = 5000;
 
 const app = express();
 
@@ -38,6 +39,8 @@ app.post('/crop-video', upload.single('videoData'), (req, res) => {
   }
 
   const videoPath = req.file.path;
+  const duration = req.body.duration;
+
   const uniqueFilename = `${Date.now()}-last5.mp4`;
 
   const ffprobeProcess = spawn('ffprobe', [
@@ -46,7 +49,8 @@ app.post('/crop-video', upload.single('videoData'), (req, res) => {
     '-select_streams',
     'v:0',
     '-show_entries',
-    'format=duration',
+    'stream=duration',
+    '-sexagesimal',
     '-of',
     'default=noprint_wrappers=1:nokey=1',
     videoPath,
@@ -61,14 +65,21 @@ app.post('/crop-video', upload.single('videoData'), (req, res) => {
     }
 
     const outputPath = path.join(trimVideoPath, uniqueFilename);
-  
+
+    const stopTrim = duration;
+    let srartTrim = 0;
+
+    if (+duration > 300) {
+      srartTrim = duration - 300;
+    }
+
     const trimProcess = spawn('ffmpeg', [
       '-i',
       videoPath,
       '-ss',
-      '00:00:00',
+      srartTrim,
       '-t',
-      '00:05:00',
+      stopTrim,
       '-c',
       'copy',
       outputPath,
